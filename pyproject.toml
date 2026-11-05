@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kstone-viewer"
+version = "0.0.1"
+description = "Browser viewer for the kstone debug server, for smoke tests"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "kehuanjack", email = "1506289682@qq.com" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.22", "trimesh", "viser>=1.0", "yourdfpy"]
+
+[project.urls]
+Homepage = "https://github.com/AgilexOpensource/kstone_viewer"
+Issues = "https://github.com/AgilexOpensource/kstone_viewer/issues"
+
+[project.scripts]
+kstone-viewer = "kstone_viewer.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["kstone_viewer*"]
