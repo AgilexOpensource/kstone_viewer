@@ -14,7 +14,7 @@ pip install "git+https://github.com/AgilexOpensource/kstone_viewer.git"
 
 ## 使用
 
-先启动调试服务：`kstone run <配置> --realtime --serve 7311`，或在 Python 中调用 `engine.serve()`，或在 C++ 中创建 `DebugServer`。然后：
+先启动调试服务：`kstone run <配置> --serve 7311`，或在 Python 中调用 `engine.serve()`，或在 C++ 中创建 `DebugServer`。然后：
 
 ```bash
 kstone-viewer --connect 127.0.0.1:7311
@@ -28,6 +28,10 @@ viewer 会打印要打开的地址，默认 `http://127.0.0.1:8080`。服务会�
 ssh -N -L 7311:127.0.0.1:7311 user@robot
 kstone-viewer --connect 127.0.0.1:7311
 ```
+
+同一服务的客户端之间平等，最后写入的生效；打开 viewer 页面的所有浏览器都算同一个 viewer。页面没有登录，所以 `--host` 保持默认的 `127.0.0.1`，通过 SSH 访问（`ssh -N -L 8080:127.0.0.1:8080 user@host`），不要绑定到网络地址。
+
+你的代码写入的运动目标（frame 和关节目标、底盘运动）保持优先：viewer 对这些端口的写入会被暂时拒绝（模块上显示 API 占用），并且不会重放。
 
 其他选项见 `kstone-viewer --help`。
 

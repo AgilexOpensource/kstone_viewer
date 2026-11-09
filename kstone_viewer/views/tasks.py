@@ -117,8 +117,8 @@ class FrameTaskView(ModuleView):
         value = ((self.state or {}).get("ports") or {}).get(self.pose_name)
         if self.entry_xyz is None or not value or time.monotonic() - self.entry_edited < EDIT_HOLD_S:
             return
-        r = wxyz_to_matrix(np.asarray(value["rotation"], dtype=float))
-        self.ui.set_value(self.entry_xyz, tuple(round(float(v), 4) for v in value["translation"]))
+        r = wxyz_to_matrix(np.asarray(value["orientation"], dtype=float))
+        self.ui.set_value(self.entry_xyz, tuple(round(float(v), 4) for v in value["position"]))
         self.ui.set_value(self.entry_rpy, degrees(r))
 
     def target_here(self) -> None:
@@ -187,8 +187,8 @@ class JointTargetView(ModuleView):
 
     def build(self) -> None:
         self.card = self.ui.html(html.card(html.badge_row(self.badges(None))))
-        # With claim_idle the checkbox is the ancestor's joint control: hold and claim these joints while checked.
-        self.direct = "claim_idle" in self.params
+        # With on_idle the checkbox is the ancestor's joint control: hold and claim these joints while checked.
+        self.direct = "on_idle" in self.params
         if self.direct:
             self.control = self.ui.checkbox(
                 "关节控制", "Joint control", False, disabled=True,
@@ -212,25 +212,21 @@ class JointTargetView(ModuleView):
                      "(home_motion), holding these joints until done")
             self.actions = self.ui.choice("快捷", "Quick", quick, quick[0][0], buttons=True, hint=hint)
             self.actions.on_change(self.quick)
-        self.add_tune(exclude=(("claim_idle",),) if self.direct else ())
-        self.hold_leaf = next((l for l in getattr(getattr(self, "tune", None), "leaves", []) if l.path == ("hold_idle",)), None)
+        self.add_tune()
         self.add_plot()
 
     def show(self, state: dict) -> None:
         super().show(state)
-        if self.hold_leaf is not None:
-            # claim_idle already holds idle joints, so hold_idle only matters with joint control off.
-            self.hold_leaf.control.disabled = bool(self.params.get("claim_idle"))
         if self.direct:
             self.control.disabled = False
             if time.monotonic() - self.edited >= EDIT_HOLD_S:
                 self.ui.set_value(self.control, self.holding())
 
     def holding(self) -> bool:
-        return bool(self.params.get("claim_idle")) and bool((self.state or {}).get("enabled"))
+        return self.params.get("on_idle") == "claim" and bool((self.state or {}).get("enabled"))
 
     def controlling(self) -> bool:
-        # No claim flag in the state: a held claim_idle, or another module held by this one, means it drives.
+        # No claim flag in the state: a held on_idle claim, or another module held by this one, means it drives.
         if self.holding():
             return True
         mods = (self.app.state or {}).get("modules") or []
@@ -243,7 +239,7 @@ class JointTargetView(ModuleView):
         on = bool(self.control.value)
         if on and not (self.state or {}).get("enabled"):
             self.app.request("set_enabled", self.id, enabled=True)
-        self.app.request("tune", self.id, params={"claim_idle": on})
+        self.app.request("tune", self.id, params={"on_idle": "claim" if on else "hold"})
 
     def measured(self) -> list | None:
         q = (self.app.state or {}).get("q")

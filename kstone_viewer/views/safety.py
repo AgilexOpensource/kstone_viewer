@@ -202,8 +202,8 @@ class Obstacle:
         if self.pose.dragging or now - max(self.edited, self.pose.edited) < EDIT_HOLD_S:
             return
         local = np.eye(4)
-        local[:3, :3] = wxyz_to_matrix(np.asarray(pose["rotation"], dtype=float))
-        local[:3, 3] = pose["translation"]
+        local[:3, :3] = wxyz_to_matrix(np.asarray(pose["orientation"], dtype=float))
+        local[:3, 3] = pose["position"]
         self.show_local(local)
 
 
@@ -236,21 +236,21 @@ class CollisionView(SafetyView):
     def update(self) -> None:
         t, out = self.ui.t, self.outputs()
         constraint = self.params.get("constraint") if isinstance(self.params.get("constraint"), dict) else {}
-        d_min = number(constraint.get("d_min")) or 0.0
-        activation = d_min + (number(constraint.get("activation_margin")) or 0.0)
+        clearance = number(constraint.get("clearance")) or 0.0
+        activation = clearance + (number(constraint.get("activation_margin")) or 0.0)
         distance = number(out.get("min_distance"))
-        tone = "muted" if distance is None else ("bad" if distance < d_min else ("warn" if distance < activation else "ok"))
+        tone = "muted" if distance is None else ("bad" if distance < clearance else ("warn" if distance < activation else "ok"))
         cells = [html.stat(t("最近距离", "closest"), "--" if distance is None else f"{distance * 1000:.1f} mm", tone,
-                           f"d_min {d_min * 1000:.1f} mm"),
+                           f"clearance {clearance * 1000:.1f} mm"),
                  html.stat(t("屏障起作用于", "barrier from"), f"{activation * 1000:.1f} mm", None,
-                           t("d_min + 激活余量", "d_min + activation margin")),
+                           t("clearance + 激活余量", "clearance + activation margin")),
                  html.stat(t("增益", "gain"), html.fmt(constraint.get("gain", "--")))]
         active, pairs = number(out.get("active_pairs")), number(out.get("pairs"))
         if pairs is not None:
             cells[2] = html.stat(t("激活屏障", "barriers"), "--" if active is None else str(int(active)),
                                  "warn" if active else None, f"{int(pairs)} {t('对', 'pairs')}")
         scale = max(activation * 2.0, 1e-6)
-        bar = html.bar(1.0 if distance is None else distance / scale, tone or "info", marker=d_min / scale)
+        bar = html.bar(1.0 if distance is None else distance / scale, tone or "info", marker=clearance / scale)
         badges = self.badges(self.state) + [self.loop_badge(), self.at_badge()]
         if distance is None:
             badges.append(html.badge(t("无障碍物", "no obstacles"), "muted"))

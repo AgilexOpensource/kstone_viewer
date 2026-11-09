@@ -58,6 +58,22 @@ def apply_theme(server: viser.ViserServer, dark: bool) -> None:
     )
 
 
+def feedback_badges(state: dict, tr) -> list[str]:
+    """One feedback badge per group when there are several, else one overall badge; tr(zh, en) picks the text."""
+    def one(name: str, fresh: bool, attached: bool) -> str:
+        if not fresh:
+            return html.badge(name + tr("过期", "stale"), "bad")
+        if not attached:
+            return html.badge(name + tr("同步中", "syncing"), "warn")
+        return html.badge(name + tr("新鲜", "fresh"), "ok")
+
+    groups = state.get("groups") or []
+    if len(groups) > 1:
+        return [one(f"{g.get('name', '?')} ", bool(g.get("fresh", True)), bool(g.get("attached", True)))
+                for g in groups]
+    return [one(tr("实测", "feedback "), bool(state.get("fresh", True)), bool(state.get("attached", True)))]
+
+
 def ms(seconds) -> str:
     return f"{seconds * 1e3:.2f}" if finite(seconds) else "--"
 
@@ -89,8 +105,6 @@ class App:
         server.gui.add_html(STICKY_TABS)
         self.build_scene(urdf_path, hello)
         self.state = None
-        self.last_lease = None
-        self.mine = False
         self.last_text = 0.0
         self.samples = Samples(hello)
         self.sample_keys = []
@@ -218,11 +232,6 @@ class App:
                           hint=("把所有可调参数恢复为默认值", "Restore every tunable parameter to its default"))
         reset.on_click(lambda event: ui.confirm(event.client, ui.k("defaults_all"), ui.k("defaults_all_confirm"),
                                                 ui.k("defaults_all"), self.defaults_all))
-        with ui.folder("控制权", "Control"):
-            self.lease = self.keyed(self.server.gui.add_markdown(t("control_shared")), "content", "control_shared")
-            self.exclusive = ui.checkbox("独占控制", "Exclusive control", False,
-                                         hint=("持有租约时其他客户端的写入会被拒绝", "Other clients' writes are refused while you hold the lease"))
-            self.exclusive.on_update(self.toggle_lease)
         self.solver = None
         with ui.folder("求解器", "Solver"):
             self.solver_card = ui.html("")
@@ -262,7 +271,7 @@ class App:
         dark.on_update(lambda event: self.toggled(event, "dark_mode"))
         types = {m["type"] for m in self.hello["modules"]}
         outputs = {o["name"] for m in self.hello["modules"] for o in m.get("outputs") or ()}
-        needs = {"show_planned": bool(outputs & {"planned", "goal"}), "show_gaze": "gaze" in types,
+        needs = {"show_planned": bool(outputs & {"planned", "target"}), "show_gaze": "gaze" in types,
                  "show_com": "center_of_mass" in types, "chassis_vectors": "chassis" in types,
                  "chassis_trail": "chassis" in types, "follow_camera": "chassis" in types}
         with ui.folder("场景元素", "Scene"):
@@ -304,7 +313,6 @@ class App:
         self.t.code = self.ui.language
         if self.state is not None:
             self.update_text(self.state)
-        self.on_lease(self.last_lease)
 
     def set_render_hz(self, hz: int) -> None:
         self.render_hz = hz
@@ -375,30 +383,8 @@ class App:
         return rate
 
     def home_all(self) -> None:
-        """Home each part once: modules currently driving it first, then uncovered ones in config order."""
-        candidates = [v for v in self.views.values() if v.homeable]
-        state = self.state or {}
-        running = {m["id"] for m in state.get("modules", []) if m.get("running")}
-        driving = {r.get("module") for r in state.get("residuals", [])} & running
-        chosen = [v for v in candidates if v.id in driving]
-        covered: set[str] = set()
-        everything = False
-        for v in chosen:
-            scope = set(v.module.get("driven") or [])
-            everything |= not scope
-            covered |= scope
-        for v in candidates:
-            if v in chosen or everything:
-                continue
-            scope = set(v.module.get("driven") or [])
-            if scope and not scope & covered:
-                chosen.append(v)
-                covered |= scope
-            elif not scope and not covered:
-                chosen.append(v)
-                everything = True
-        for v in chosen:
-            self.request("home", v.id)
+        """Home the modules in control; the server arbitrates (see ModuleSet::home_all)."""
+        self.request("home_all")
 
     def defaults_all(self) -> None:
         for view in self.views.values():
@@ -406,11 +392,6 @@ class App:
                 view.tune.restore_defaults()
         if self.solver is not None:
             self.solver.restore_defaults()
-
-    def toggle_lease(self, event) -> None:
-        if event.client is None or not self.ui.user():
-            return
-        self.request("acquire" if self.exclusive.value else "release")
 
     # -- helpers used by views and ports -------------------------------------------------------------------------
     def slider_range(self, joint: str, lower, upper) -> tuple[float, float]:
@@ -447,20 +428,6 @@ class App:
         self.pending[self.client.send(op, module, **fields)] = (f"{op} {target}".strip(), on_fail)
 
     # -- server messages -----------------------------------------------------------------------------------------
-    def on_lease(self, lease: dict | None) -> None:
-        if lease is None:
-            return
-        self.last_lease = lease
-        holder = lease.get("holder")
-        if holder is None:
-            self.lease.content = self.t("control_shared")
-        elif lease.get("mine"):
-            self.lease.content = self.t("control_mine")
-        else:
-            self.lease.content = self.t("control_other", holder=holder)
-        self.mine = bool(lease.get("mine"))
-        self.ui.set_value(self.exclusive, self.mine)
-
     def on_params(self, message: dict) -> None:
         view = self.views.get(message.get("module"))
         if view is not None and isinstance(message.get("values"), dict):
@@ -487,8 +454,6 @@ class App:
         )
         if on_fail is not None:
             on_fail()
-        # A refused acquire/release sends no lease update, so undo the checkbox here.
-        self.ui.set_value(self.exclusive, self.mine)
 
     # -- camera and skeleton -------------------------------------------------------------------------------------
     def frame_model(self) -> tuple[np.ndarray, np.ndarray]:
@@ -666,11 +631,7 @@ class App:
         stats = state.get("stats") or {}
         held = stats.get("held_cycles", 0) or 0
         badges = [html.badge(ui.t("已暂停", "paused"), "warn") if state.get("paused")
-                  else html.badge(t("running"), "ok"),
-                  html.badge(ui.t("实测新鲜", "fresh"), "ok") if state.get("fresh", True)
-                  else html.badge(ui.t("实测过期", "stale"), "bad")]
-        if self.last_lease and self.last_lease.get("holder") is not None:
-            badges.append(html.badge(ui.t("独占", "exclusive"), "accent" if self.mine else "warn"))
+                  else html.badge(t("running"), "ok"), *feedback_badges(state, ui.t)]
         failed = stats.get("failed_cycles", 0) or 0
         rate = self.measure_rate(state)
         actual = self.actual_hz

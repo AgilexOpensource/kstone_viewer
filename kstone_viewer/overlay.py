@@ -24,7 +24,7 @@ GAZE_COLOR = (232, 162, 0)
 
 def display_key(module_type: str, output: str) -> str | None:
     """The scene toggle (besides the module's own) that also gates an output, like the ancestor's display groups."""
-    if output in ("planned", "goal"):
+    if output in ("planned", "target"):
         return "show_planned"
     if module_type == "gaze":
         return "show_gaze"
@@ -130,8 +130,8 @@ class ModuleOverlay:
                 continue
             visual.visible = pose is not None
             if pose is not None:
-                put(visual, "position", pose["translation"])
-                put(visual, "wxyz", pose["rotation"])
+                put(visual, "position", pose["position"])
+                put(visual, "wxyz", pose["orientation"])
         tint = {}
         values = display.get("outputs", {})
         tinting = sorted((o for o in self.outputs if o["type"] == "visuals"), key=lambda o: ROLE_RANK.get(o.get("role"), 0))

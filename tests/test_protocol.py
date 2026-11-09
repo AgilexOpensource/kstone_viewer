@@ -44,9 +44,16 @@ except ConnectionError as err:
 
 runner = threading.Thread(target=e.run)
 runner.start()
+other = Client("127.0.0.1", server.port)
+other.handshake(token)
+assert other.request("set_enabled", "fingers", enabled=True)["ok"]
+assert client.request("set_enabled", "fingers", enabled=True)["ok"]
+refused = client.request("control")
+assert not refused["ok"] and refused["code"] == "unsupported", refused
+other.close()
 assert client.request("set_enabled", "fingers", enabled=False)["ok"]
 # Python's json writes inf as Infinity; the server accepts it and echoes null.
-request = client.send("tune", "arm", params=nest(("trajectory", "velocity_cap"), parse_list("0.5, inf, inf")))
+request = client.send("tune", "arm", params=nest(("trajectory", "max_velocity"), parse_list("0.5, inf, inf")))
 replied = broadcast = False
 while not (replied and broadcast):
     message = client.receive()
@@ -54,12 +61,12 @@ while not (replied and broadcast):
         assert message["ok"], message
         replied = True
     elif message["type"] == "params" and message["module"] == "arm":
-        assert lookup(message["values"], ("trajectory", "velocity_cap")) == [0.5, None, None], message
+        assert lookup(message["values"], ("trajectory", "max_velocity")) == [0.5, None, None], message
         broadcast = True
 e.stop()
 runner.join(5.0)
 assert not e.module("fingers").enabled
-assert list(e.module("arm").params()["trajectory"]["velocity_cap"]) == [0.5, math.inf, math.inf]
+assert list(e.module("arm").params()["trajectory"]["max_velocity"]) == [0.5, math.inf, math.inf]
 client.close()
 server.stop()
 

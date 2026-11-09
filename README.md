@@ -14,7 +14,7 @@ It depends on viser, yourdfpy, trimesh and numpy.
 
 ## Use
 
-Start a debug server with `kstone run <config> --realtime --serve 7311`, `engine.serve()` in Python or `DebugServer` in C++. Then:
+Start a debug server with `kstone run <config> --serve 7311`, `engine.serve()` in Python or `DebugServer` in C++. Then:
 
 ```bash
 kstone-viewer --connect 127.0.0.1:7311
@@ -28,6 +28,10 @@ For a remote server, pass its token with `--token-file` or `$KSTONE_TOKEN`. The 
 ssh -N -L 7311:127.0.0.1:7311 user@robot
 kstone-viewer --connect 127.0.0.1:7311
 ```
+
+Clients of a server are equal and the last write wins; every browser that opens the viewer page acts as that one viewer. The page has no login, so keep `--host` at its default `127.0.0.1` and reach it over SSH (`ssh -N -L 8080:127.0.0.1:8080 user@host`) rather than binding it to a network address.
+
+Motion targets your own code writes (frame and joint targets, chassis motion) keep priority: the viewer's writes to them are refused for a moment (shown as API holds on the module) and are not replayed.
 
 `kstone-viewer --help` lists the other options.
 

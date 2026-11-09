@@ -8,9 +8,9 @@ from .safety import CenterOfMassView, CollisionView
 from .tasks import FrameTaskView, JointTargetView, NullSpacePreferenceView
 
 VIEWS: dict[str, type[ModuleView]] = {
-    "frame_task": FrameTaskView,
+    "frame_target": FrameTaskView,
     "joint_target": JointTargetView,
-    "null_space_preference": NullSpacePreferenceView,
+    "null_space": NullSpacePreferenceView,
     "gaze": GazeView,
     "chassis": ChassisView,
     "center_of_mass": CenterOfMassView,

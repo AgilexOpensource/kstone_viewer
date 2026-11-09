@@ -6,7 +6,7 @@ The token defaults to $KSTONE_TOKEN when the server requires one. Reconnects whe
 The model comes from --urdf, else is downloaded from the server (cached in $XDG_CACHE_HOME/kstone/models),
 else the server's URDF path is used if it exists on this host.
 
-Tabs: overview (lease, run/pause/step, home all, residuals), modules (ports, schema-generated tuning,
+Tabs: overview (run/pause/step, home all, residuals), modules (ports, schema-generated tuning,
 scalar outputs with units and a plot preset to the module's own keys), plots (added and removed panels of any
 state scalar), safety (feedback freshness, every engine stat with counter rates, cycle-time and margin plots),
 joints and display. Ports with timeout_s are resent while nonzero until stopped. Module visuals and display
@@ -108,8 +108,6 @@ def serve(server: viser.ViserServer, client: Client, hello: dict, urdf: Path, ra
                 old = viewer
                 viewer = build(server, client, hello, urdf, prefs, old)
                 viewer.pending = old.pending
-                if old.last_lease is not None:
-                    viewer.on_lease(old.last_lease)
                 if old.state is not None:
                     viewer.on_state(old.state)
             while True:
@@ -120,8 +118,6 @@ def serve(server: viser.ViserServer, client: Client, hello: dict, urdf: Path, ra
                 kind = message.get("type")
                 if kind == "reply":
                     viewer.on_reply(message)
-                elif kind == "lease":
-                    viewer.on_lease(message)
                 elif kind == "params":
                     viewer.on_params(message)
                 elif kind == "solver_params":

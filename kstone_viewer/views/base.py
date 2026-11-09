@@ -145,6 +145,8 @@ class ModuleView:
             out = [html.badge(t("disabled"), "muted")]
         if self.recently_preempted(int(state.get("preempted") or 0)):
             out.append(html.badge(t("preempted", n=int(state["preempted"])), "info"))
+        if state.get("api_held"):
+            out.append(html.badge(plain(t("api_held", ports=", ".join(state["api_held"]))), "warn"))
         home = HOME_STATES.get(state.get("home"))
         if home is not None:
             out.append(html.badge(plain(home[0] if t.code == "zh" else home[1]), home[2]))
@@ -179,6 +181,10 @@ class ModuleView:
         for name, value in (state.get("ports") or {}).items():
             if name in self.ports:
                 self.ports[name].show(value)
+        for name in state.get("api_held") or ():
+            port = self.ports.get(name)
+            if isinstance(port, VectorPort):
+                port.stop_keepalive()
 
     def update(self) -> None:
         """Redraw the cards (text rate; also after a language switch)."""

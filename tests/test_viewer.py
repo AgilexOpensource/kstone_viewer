@@ -57,3 +57,28 @@ with tempfile.TemporaryDirectory(prefix="kstone-") as tmp:
     blocked = Prefs(Path(tmp) / "sub" / "viewer.json" / "x.json")
     blocked.set("a", 1)
     assert blocked.error and blocked.get("a", 0) == 1
+
+try:
+    from kstone_viewer.app import App
+except ImportError:
+    App = None
+if App is not None:
+    class HomeFake:
+        def __init__(self):
+            self.sent = []
+
+        def request(self, op, module=None, **fields):
+            self.sent.append((op, module))
+
+    fake = HomeFake()
+    App.home_all(fake)
+    assert fake.sent == [("home_all", None)], fake.sent
+
+    from kstone_viewer.app import feedback_badges
+    en = lambda zh, en: en
+    two = {"groups": [{"name": "joints", "fresh": True, "attached": True},
+                      {"name": "base", "fresh": False, "attached": False}], "fresh": False}
+    out = feedback_badges(two, en)
+    assert len(out) == 2 and "joints fresh" in out[0] and "base stale" in out[1], out
+    assert "syncing" in feedback_badges({"fresh": True, "attached": False}, en)[0]
+    assert "feedback fresh" in feedback_badges({}, en)[0]

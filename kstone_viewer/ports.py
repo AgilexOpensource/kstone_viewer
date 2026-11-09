@@ -97,8 +97,8 @@ class PosePort:
         if self.dragging or time.monotonic() - self.edited < EDIT_HOLD_S:
             return
         local = np.eye(4)
-        local[:3, :3] = wxyz_to_matrix(np.asarray(value["rotation"], dtype=float))
-        local[:3, 3] = value["translation"]
+        local[:3, :3] = wxyz_to_matrix(np.asarray(value["orientation"], dtype=float))
+        local[:3, 3] = value["position"]
         set_pose(self.gizmo, self.viewer.reference_pose(self.reference) @ local)
 
 

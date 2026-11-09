@@ -54,7 +54,7 @@ class ChassisView(ModuleView):
         self.limits = tuple(abs(float(v)) or 1.0 for v in (list(upper) + list(DEFAULT_LIMITS))[:3])
         chassis = self.params.get("chassis") if isinstance(self.params.get("chassis"), dict) else {}
         self.differential = chassis.get("kinematics") == "differential"
-        self.has_pose = (self.port_specs.get("pose_goal") or {}).get("type") == "vector"
+        self.has_pose = (self.port_specs.get("pose_target") or {}).get("type") == "vector"
         self.stick = JoystickInput(differential=self.differential, deadband=0.05)
         self.joystick = None
         self.stick_sent = (0.0, 0.0, 0.0)
@@ -72,7 +72,7 @@ class ChassisView(ModuleView):
         self.add_enabled("启用", "Enabled")
         modes = MODES if self.has_pose else MODES[:2]
         self.mode = ui.choice("控制方式", "Control", modes, self.mode_key, buttons=True,
-                              hint=("写入模块的 velocity / pose_goal 端口", "Writes the module's velocity / pose_goal ports"))
+                              hint=("写入模块的 velocity / pose_target 端口", "Writes the module's velocity / pose_target ports"))
         self.mode.on_change(self.select_mode)
         stop = ui.button("急停", "Stop", icon="HAND_STOP", color="red",
                          hint=("发送零速度并停止重发", "Send zero velocity and stop resending"))
@@ -122,9 +122,9 @@ class ChassisView(ModuleView):
 
     def build_pose(self) -> None:
         ui = self.ui
-        self.pose = VectorPort(self.app, self.id, self.port_specs["pose_goal"], sliders=False, stop_button=False,
+        self.pose = VectorPort(self.app, self.id, self.port_specs["pose_target"], sliders=False, stop_button=False,
                                zero_idle=False)
-        self.ports["pose_goal"] = self.pose
+        self.ports["pose_target"] = self.pose
         self.pose_folder = ui.folder("目标位姿", "Pose goal")
         with self.pose_folder:
             ui.static("<div style='font-size:12px;opacity:.7'>拖动场景中的底盘目标（平移 xy / 绕 z 旋转），或直接输入。</div>",

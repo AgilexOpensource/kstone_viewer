@@ -11,7 +11,7 @@ def parse_endpoint(text: str) -> tuple[str, int]:
 
 
 def pose_to_wire(position, wxyz) -> dict:
-    return {"translation": [float(v) for v in position], "rotation": [float(v) for v in wxyz]}
+    return {"position": [float(v) for v in position], "orientation": [float(v) for v in wxyz]}
 
 
 def matrix_to_wxyz(r: np.ndarray) -> np.ndarray:
