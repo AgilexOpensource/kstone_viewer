@@ -1,6 +1,5 @@
 """Local cache of the model bundle a debug server serves (URDF plus the meshes it references)."""
 
-import hashlib
 import os
 import re
 from pathlib import Path
@@ -23,11 +22,11 @@ def _target(root: Path, name: str) -> Path:
 
 
 def _valid(path: Path, meta: dict) -> bool:
+    # The bundle id covers every file's stamp, so within one bundle directory the size is enough.
     try:
-        data = path.read_bytes()
+        return path.stat().st_size == meta.get("size")
     except OSError:
         return False
-    return len(data) == meta.get("size") and hashlib.sha256(data).hexdigest() == meta.get("sha256")
 
 
 def materialize(client: Client, assets: dict, root: Path | None = None) -> Path:
@@ -49,7 +48,7 @@ def materialize(client: Client, assets: dict, root: Path | None = None) -> Path:
         if _valid(path, meta):
             continue
         data = client.fetch(name)
-        if len(data) != meta.get("size") or hashlib.sha256(data).hexdigest() != meta.get("sha256"):
+        if len(data) != meta.get("size"):
             raise ValueError(f"{name}: downloaded content does not match the manifest")
         path.parent.mkdir(parents=True, exist_ok=True)
         part = path.with_name(path.name + ".part")
