@@ -294,6 +294,12 @@ class JointTargetView(ModuleView):
 
 class NullSpacePreferenceView(ModuleView):
     tab = "tasks"
+    # Top-level params that only matter under one preference; the rest are always shown.
+    PREFERENCE_PARAMS = {
+        "posture": ("reference", "posture_values", "reseed_current", "posture_weight", "posture_velocity_scale"),
+        "manipulability": ("manipulability_weight",),
+        "joint_limits": ("joint_limits_weight", "joint_limits_band", "joint_limits_rate"),
+    }
 
     @property
     def anchor(self):
@@ -318,6 +324,21 @@ class NullSpacePreferenceView(ModuleView):
         self.add_enabled()
         self.add_tune(exclude=(("posture",),))
         self.add_posture_sliders()
+        self.show_relevant()
+
+    def show_relevant(self) -> None:
+        """Hides the controls the selected preference (and posture reference) doesn't use."""
+        mode, reference = self.params.get("preference"), self.params.get("reference")
+        owner = {key: m for m, keys in self.PREFERENCE_PARAMS.items() for key in keys}
+        for leaf in self.tune.leaves if self.tune is not None else ():
+            key = leaf.path[0]
+            visible = owner.get(key, mode) == mode and not (key == "posture_values" and reference == "current")
+            if leaf.control.visible != visible:
+                leaf.control.visible = visible
+        if self.posture:
+            visible = mode == "posture" and reference == "custom"
+            if self.posture_folder.visible != visible:
+                self.posture_folder.visible = visible
 
     def posture_joints(self) -> list[dict]:
         """The module's posture order: configured joints, else the driven scalar joints in model order."""
@@ -372,6 +393,7 @@ class NullSpacePreferenceView(ModuleView):
     def on_params(self, values: dict) -> None:
         super().on_params(values)
         self.show_posture()
+        self.show_relevant()
 
     def update(self) -> None:
         t, p = self.ui.t, self.params
