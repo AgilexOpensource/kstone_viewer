@@ -298,7 +298,6 @@ class NullSpacePreferenceView(ModuleView):
     PREFERENCE_PARAMS = {
         "posture": ("reference", "posture_values", "reseed_current", "posture_weight", "posture_velocity_scale"),
         "manipulability": ("manipulability_weight",),
-        "joint_limits": ("joint_limits_weight", "joint_limits_band", "joint_limits_rate"),
     }
 
     @property
@@ -398,8 +397,7 @@ class NullSpacePreferenceView(ModuleView):
     def update(self) -> None:
         t, p = self.ui.t, self.params
         mode = str(p.get("preference", "--"))
-        names = {"posture": ("姿态", "Posture"), "manipulability": ("可操作度", "Manipulability"),
-                 "joint_limits": ("关节限位", "Joint limits")}
+        names = {"posture": ("姿态", "Posture"), "manipulability": ("可操作度", "Manipulability")}
         cells = [html.stat(t("偏好", "Preference"), t(*names.get(mode, (mode, mode)))),
                  html.stat(t("权重", "Weight"), html.fmt(p.get(f"{mode}_weight", "--"))),
                  html.stat(t("阻尼", "Damping"), html.fmt((p.get("projector") or {}).get("damping", "--")))]
