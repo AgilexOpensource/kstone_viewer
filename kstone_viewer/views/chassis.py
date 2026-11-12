@@ -52,8 +52,7 @@ class ChassisView(ModuleView):
         velocity = self.port_specs.get("velocity") or {}
         upper = velocity.get("upper") or DEFAULT_LIMITS
         self.limits = tuple(abs(float(v)) or 1.0 for v in (list(upper) + list(DEFAULT_LIMITS))[:3])
-        chassis = self.params.get("chassis") if isinstance(self.params.get("chassis"), dict) else {}
-        self.differential = chassis.get("kinematics") == "differential"
+        self.differential = (module.get("properties") or {}).get("kinematics") == "differential"
         self.has_pose = (self.port_specs.get("pose_target") or {}).get("type") == "vector"
         self.stick = JoystickInput(differential=self.differential, deadband=0.05)
         self.joystick = None
