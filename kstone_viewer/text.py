@@ -48,6 +48,8 @@ TEXT = {
     "api_held": ("API 占用 {ports}", "API holds {ports}"),
     "home_all": ("全部回零", "home all"),
     "home_all_confirm": ("让持有控制权的模块回零？无人控制或被注视等不可回零模块控制的部位保持不动。", "Home the modules in control? Parts nobody controls, or controlled by non-homeable modules such as gaze, stay put."),
+    "resync_all": ("同步实测", "sync to feedback"),
+    "resync_confirm": ("把命令对齐到当前实测位置，并放弃保持的目标？开驱动闸门前用它避免跳变；机器人不会因此运动。", "Realign the command to the current measurement and drop held targets? Use it before opening a driver gate to avoid a jump; the robot does not move."),
     "defaults_all": ("全部恢复默认参数", "restore all defaults"),
     "run": ("运行", "run"),
     "pause": ("暂停", "pause"),

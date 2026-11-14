@@ -74,6 +74,17 @@ if App is not None:
     App.home_all(fake)
     assert fake.sent == [("home_all", None)], fake.sent
 
+    class ResyncFake:
+        def __init__(self):
+            self.sent = []
+
+        def request(self, op, module=None, label=None, **fields):
+            self.sent.append((op, fields))
+
+    fake = ResyncFake()
+    App.resync(fake)
+    assert fake.sent == [("resync", {})], fake.sent
+
     from kstone_viewer.app import feedback_badges
     en = lambda zh, en: en
     two = {"groups": [{"name": "joints", "fresh": True, "attached": True},
@@ -82,3 +93,8 @@ if App is not None:
     assert len(out) == 2 and "joints fresh" in out[0] and "base stale" in out[1], out
     assert "syncing" in feedback_badges({"fresh": True, "attached": False}, en)[0]
     assert "feedback fresh" in feedback_badges({}, en)[0]
+    off = {"groups": [{"name": "head", "fresh": True, "attached": True, "deviation": 0.5},
+                      {"name": "base", "fresh": True, "attached": True, "deviation": 0.001}]}
+    out = feedback_badges(off, en)
+    assert "head off by 0.500" in out[0] and "base fresh" in out[1], out
+    assert "off by" in feedback_badges({"groups": [{"name": "default", "deviation": 0.1}]}, en)[0]

@@ -25,6 +25,7 @@ from .views import ModuleView, view_for
 DEFAULT_RENDER_HZ = 30
 GHOST_COLOR = (0.35, 0.6, 1.0, 0.35)
 GHOST_TOLERANCE = 1e-4
+DEVIATION_WARN = 0.02  # rad or m: a feedback group whose command is this far from its measurement is flagged
 MIN_RENDER_HZ = 5
 MAX_RENDER_HZ = 60
 MIN_RATE_HZ = 1.0
@@ -60,18 +61,21 @@ def apply_theme(server: viser.ViserServer, dark: bool) -> None:
 
 def feedback_badges(state: dict, tr) -> list[str]:
     """One feedback badge per group when there are several, else one overall badge; tr(zh, en) picks the text."""
-    def one(name: str, fresh: bool, attached: bool) -> str:
+    def one(name: str, fresh: bool, attached: bool, deviation) -> str:
         if not fresh:
             return html.badge(name + tr("过期", "stale"), "bad")
         if not attached:
             return html.badge(name + tr("同步中", "syncing"), "warn")
+        if finite(deviation) and deviation > DEVIATION_WARN:
+            return html.badge(name + tr(f"偏差 {deviation:.3f}", f"off by {deviation:.3f}"), "warn")
         return html.badge(name + tr("新鲜", "fresh"), "ok")
 
     groups = state.get("groups") or []
     if len(groups) > 1:
-        return [one(f"{g.get('name', '?')} ", bool(g.get("fresh", True)), bool(g.get("attached", True)))
-                for g in groups]
-    return [one(tr("实测", "feedback "), bool(state.get("fresh", True)), bool(state.get("attached", True)))]
+        return [one(f"{g.get('name', '?')} ", bool(g.get("fresh", True)), bool(g.get("attached", True)),
+                    g.get("deviation")) for g in groups]
+    deviation = groups[0].get("deviation") if groups else None
+    return [one(tr("实测", "feedback "), bool(state.get("fresh", True)), bool(state.get("attached", True)), deviation)]
 
 
 def ms(seconds) -> str:
@@ -228,6 +232,10 @@ class App:
                          hint=("每个部位只回零一次：优先由正在驱动它的模块回零", "Home each part once, through the module driving it"))
         home.on_click(lambda event: ui.confirm(event.client, ui.k("home_all"), ui.k("home_all_confirm"),
                                                ui.k("home_all"), self.home_all))
+        resync = ui.button("同步实测", "Sync to feedback", icon="REFRESH", color="orange",
+                           hint=("把命令重新对齐到实测位置并放弃保持的目标，例如驱动闸门关闭后", "Realign the command to the measured position and drop held targets, e.g. after a closed driver gate"))
+        resync.on_click(lambda event: ui.confirm(event.client, ui.k("resync_all"), ui.k("resync_confirm"),
+                                                 ui.k("resync_all"), self.resync))
         reset = ui.button("全部恢复默认", "Reset all", icon="RESTORE", color="orange",
                           hint=("把所有可调参数恢复为默认值", "Restore every tunable parameter to its default"))
         reset.on_click(lambda event: ui.confirm(event.client, ui.k("defaults_all"), ui.k("defaults_all_confirm"),
@@ -385,6 +393,10 @@ class App:
     def home_all(self) -> None:
         """Home the modules in control; the server arbitrates (see ModuleSet::home_all)."""
         self.request("home_all")
+
+    def resync(self) -> None:
+        """Sync every attached feedback group's command to its measurement; the server drops held targets."""
+        self.request("resync")
 
     def defaults_all(self) -> None:
         for view in self.views.values():
