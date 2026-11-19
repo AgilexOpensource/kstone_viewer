@@ -124,11 +124,10 @@ class ChassisView(ModuleView):
         self.ports["pose_target"] = self.pose
         self.pose_folder = ui.folder("目标位姿", "Pose goal")
         with self.pose_folder:
-            ui.static("<div style='font-size:12px;opacity:.7'>拖动场景中的底盘目标（平移 xy / 绕 z 旋转），或直接输入。</div>",
-                      "<div style='font-size:12px;opacity:.7'>Drag the chassis goal gizmo in the scene "
-                      "(xy / yaw) or type it in.</div>")
-            self.goal_entry = ui.vector3("目标 x, y (m), yaw (°)", "Goal x, y (m), yaw (°)", (0.0, 0.0, 0.0), step=0.01)
-            self.goal_entry.on_update(self.entered)
+            self.goal_entry = (ui.number("x (m)", "x (m)", 0.0, step=0.01), ui.number("y (m)", "y (m)", 0.0, step=0.01),
+                               ui.number("yaw (°)", "yaw (°)", 0.0, step=0.01))
+            for handle in self.goal_entry:
+                handle.on_update(self.entered)
             ui.button("目标 = 当前位姿", "Goal = current pose", icon="CURRENT_LOCATION").on_click(
                 lambda _: self.goal_here())
         self.pose_folder.visible = False
@@ -177,9 +176,17 @@ class ChassisView(ModuleView):
             self.goal_here()
         self.layout()
 
-    def send_goal(self, x: float, y: float, yaw: float) -> None:
+    def send_goal(self, x: float, y: float, yaw: float) -> tuple:
+        if self.differential:
+            # A differential base cannot move sideways: keep only the part along its current heading.
+            out = self.outputs()
+            bx, by, byaw = (float(out.get(k) or 0.0) for k in ("x", "y", "yaw"))
+            c, s = math.cos(byaw), math.sin(byaw)
+            along = (x - bx) * c + (y - by) * s
+            x, y = bx + along * c, by + along * s
         self.goal_edited = time.monotonic()
         self.pose.command([x, y, wrap(yaw)])
+        return x, y
 
     def goal_here(self) -> None:
         if self.pose is None:
@@ -194,25 +201,27 @@ class ChassisView(ModuleView):
     def entered(self, event) -> None:
         if event.client is None or not self.ui.user() or self.mode_key != "pose":
             return
-        x, y, yaw_deg = (float(v) for v in self.goal_entry.value)
-        with self.ui.syncing():
-            self.goal_control.position = (x, y, 0.0)
-            self.goal_control.wxyz = yaw_wxyz(math.radians(yaw_deg))
-        self.send_goal(x, y, math.radians(yaw_deg))
+        x, y, yaw_deg = (float(h.value) for h in self.goal_entry)
+        x, y = self.send_goal(x, y, math.radians(yaw_deg))
+        self.place_goal(x, y, math.radians(yaw_deg))
 
     def dragged(self, _event) -> None:
         if not self.ui.user() or self.mode_key != "pose":
             return
         x, y, _ = (float(v) for v in self.goal_control.position)
         yaw = yaw_of(self.goal_control.wxyz)
-        self.ui.set_value(self.goal_entry, (round(x, 4), round(y, 4), round(math.degrees(yaw), 2)))
-        self.send_goal(x, y, yaw)
+        x, y = self.send_goal(x, y, yaw)
+        self.show_goal(x, y, yaw)
+
+    def show_goal(self, x: float, y: float, yaw: float) -> None:
+        for handle, v in zip(self.goal_entry, (round(x, 4), round(y, 4), round(math.degrees(yaw), 2))):
+            self.ui.set_value(handle, v)
 
     def place_goal(self, x: float, y: float, yaw: float) -> None:
         with self.ui.syncing():
             self.goal_control.position = (x, y, 0.0)
             self.goal_control.wxyz = yaw_wxyz(yaw)
-        self.ui.set_value(self.goal_entry, (round(x, 4), round(y, 4), round(math.degrees(yaw), 2)))
+        self.show_goal(x, y, yaw)
 
     def stick_state(self) -> dict:
         out = self.outputs()
