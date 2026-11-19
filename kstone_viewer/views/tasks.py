@@ -63,7 +63,10 @@ class FrameTaskView(ModuleView):
                 self.entry_rpy.on_update(self.entered)
                 self.pose_html = self.ui.html()
         self.add_tune(exclude=(("locked",),))
-        self.add_plot()
+        # Position norm of the target, and of the frame at the command and the measurement (x, y, z in the list).
+        self.add_plot(preset=[] if self.pose_name is None or not self.frame else
+                      [f"{self.id}.{self.pose_name}[norm]", f"pose_command/{self.frame}[norm]",
+                       f"pose/{self.frame}[norm]"])
         self.show_lock()
 
     @property
@@ -214,7 +217,10 @@ class JointTargetView(ModuleView):
             self.actions = self.ui.choice("快捷", "Quick", quick, quick[0][0], buttons=True, hint=hint)
             self.actions.on_change(self.quick)
         self.add_tune()
-        self.add_plot()
+        # The first joint's target, command and measurement: the tracking at a glance.
+        first = self.names[0] if self.names and self.vector_name is not None else None
+        self.add_plot(preset=[] if first is None else
+                      [f"{self.id}.{self.vector_name}[{first}]", f"q_command/{first}", f"q/{first}"])
 
     def show(self, state: dict) -> None:
         super().show(state)

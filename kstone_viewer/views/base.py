@@ -144,9 +144,10 @@ class ModuleView:
             self.tune = TunePanel(self.app, self.id, self.module["tune_schema"], self.params, self.t,
                                   kind=self.type, exclude=exclude, inline=inline)
 
-    def add_plot(self, lead: tuple = ()) -> None:
-        """lead: output names filling the plot slots first (default: all own keys in order)."""
-        self.plot = PlotPanel(self.app, "module_plot", owner=self.id, expand=False, lead=lead)
+    def add_plot(self, lead: tuple = (), preset: list = ()) -> None:
+        """lead: output names filling the plot slots first (default: all own keys in order); preset: full
+        sample keys ahead of them."""
+        self.plot = PlotPanel(self.app, "module_plot", owner=self.id, expand=False, lead=lead, preset=preset)
 
     def _toggle(self, event) -> None:
         if event.client is None or not self.ui.user():

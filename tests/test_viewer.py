@@ -119,3 +119,13 @@ if App is not None:
     out = feedback_badges(off, en)
     assert "head off by 0.500" in out[0] and "base fresh" in out[1], out
     assert "off by" in feedback_badges({"groups": [{"name": "default", "deviation": 0.1}]}, en)[0]
+
+    from kstone_viewer.panels.plots import Samples
+    samples = Samples({"modules": [], "joints": [{"name": "lift", "idx_q": 0, "nq": 1}]})
+    out = samples({"q": [0.1], "q_command": [0.2]})
+    assert out["q/lift"] == 0.1 and out["q_command/lift"] == 0.2, out
+    assert "q_command/lift" not in samples({"q": [0.1]})
+    out = Samples({"modules": [], "joints": []})(
+        {"q": [], "modules": [{"id": "arm", "ports": {"target": {"position": [1.0, 2.0, 3.0], "orientation": [1, 0, 0, 0]}}}]})
+    assert out["arm.target[x]"] == 1.0 and out["arm.target[z]"] == 3.0, out
+    assert abs(out["arm.target[norm]"] - 14 ** 0.5) < 1e-9, out

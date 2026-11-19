@@ -17,6 +17,17 @@ PLOT_PERIOD_S = 0.1
 PLOT_SAMPLES = 300
 PLOT_COLORS = ("#2563eb", "#dc2626", "#16a34a", "#9333ea")
 PLOT_SLOTS = 3
+AXES = ("x", "y", "z")
+NORM = "norm"
+
+
+def position_keys(prefix: str, position) -> dict:
+    """x, y, z of a position and its norm."""
+    values = [scalar(v) for v in position[:3]]
+    out = {f"{prefix}[{axis}]": v for axis, v in zip(AXES, values) if v is not None}
+    if len(out) == 3:
+        out[f"{prefix}[{NORM}]"] = float(np.linalg.norm(values))
+    return out
 
 
 def scalar(v) -> float | None:
@@ -88,7 +99,10 @@ class Samples:
                     if (x := scalar(values.get(name))) is not None:
                         out[key] = x
             for name, value in (m.get("ports") or {}).items():
-                if isinstance(value, list):
+                if isinstance(value, dict) and isinstance(value.get("position"), list):
+                    found = position_keys(f"{mid}.{name}", value["position"])
+                    keys, values = list(found), list(found.values())
+                elif isinstance(value, list):
                     labels = self.labels.get((mid, name), ())
                     keys = [f"{mid}.{name}[{label}]" for label in labels]
                     values = [scalar(v) for v in value]
@@ -102,13 +116,19 @@ class Samples:
         for i, key in self.joints:
             if i < len(q):
                 out[key] = float(q[i])
+        # The command next to q (the measurement when fresh) shows the tracking lag.
+        command = state.get("q_command") or []
+        if len(command) == len(q):
+            for i, key in self.joints:
+                if i < len(command):
+                    out["q_command" + key[1:]] = float(command[i])
         return out
 
 
 class PlotPanel:
     """A uPlot of up to PLOT_SLOTS chosen series; changing the choice restarts the history.
 
-    The lead keys (an owner module's own keys, else the preset keys that exist) come first in the options
+    The lead keys (the preset keys that exist, then an owner module's own keys) come first in the options
     and fill the choices until the user picks one."""
 
     def __init__(self, viewer: "Viewer", title: str, owner: str | None = None, preset: list = (),
@@ -181,13 +201,13 @@ class PlotPanel:
                 )
 
     def set_keys(self, keys: list, owners: dict) -> None:
+        present = set(keys)
+        lead = [k for k in self.preset if k in present]
         if self.owner is not None:
-            lead = sorted((k for k in keys if owners.get(k, (None,))[0] == self.owner), key=lambda k: owners[k][1])
+            own = sorted((k for k in keys if owners.get(k, (None,))[0] == self.owner), key=lambda k: owners[k][1])
             if self.lead:
-                lead = [k for k in lead if k.split(" ")[0] in self.lead] or lead
-        else:
-            present = set(keys)
-            lead = [k for k in self.preset if k in present]
+                own = [k for k in own if k.split(" ")[0] in self.lead] or own
+            lead += [k for k in own if k not in lead]
         first = set(lead)
         options = (self.none, *lead, *(k for k in keys if k not in first))
         for choice in self.choices:

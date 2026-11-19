@@ -15,7 +15,7 @@ from .client import Client
 from .geometry import LinkKinematics, UrdfPoser, matrices_to_wxyz, root_transform, set_pose
 from .overlay import ModuleOverlay
 from .panels.limits import JointLimitsPanel
-from .panels.plots import PLOT_PERIOD_S, PlotPanel, Samples
+from .panels.plots import PLOT_PERIOD_S, PlotPanel, Samples, position_keys
 from .panels.stats import StatsPanel
 from .text import LANGUAGES, TEXT, Lang, Prefs
 from .tune import EDIT_HOLD_S, TunePanel, finite
@@ -120,6 +120,10 @@ class App:
         self.state = None
         self.last_text = 0.0
         self.samples = Samples(hello)
+        # (frame, reference) of each frame task's pose port, plotted at the command and the measurement.
+        self.tracked_frames = list(dict.fromkeys(
+            (p["frame"], p.get("reference") or "") for m in hello["modules"] for p in m.get("ports") or []
+            if p.get("type") == "pose" and p.get("frame")))
         self.sample_keys = []
         self.sample_set = set()
         self.plot_lock = threading.Lock()
@@ -450,6 +454,30 @@ class App:
     def link_pose(self, link: str) -> np.ndarray:
         return self.base @ self.poses.get(link, np.eye(4))
 
+    def frame_samples(self, command: list, measured: list) -> dict:
+        """Position of each frame task's frame in its target's reference, at the command and the measurement."""
+        if not self.tracked_frames:
+            return {}
+        out = {}
+        for prefix, q in (("pose_command", command), ("pose", measured)):
+            base = root_transform(self.root, q) if self.root is not None else np.eye(4)
+            poses = self.kinematics.poses(self.joint_cfg(q))
+            for frame, reference in self.tracked_frames:
+                world = self.frame_in(frame, base, poses)
+                if world is None:
+                    continue
+                ref = self.frame_in(reference, base, poses) if reference else np.eye(4)
+                if ref is None:
+                    continue
+                local = np.linalg.solve(ref, world)
+                out.update(position_keys(f"{prefix}/{frame}", local[:3, 3].tolist()))
+        return out
+
+    def frame_in(self, frame: str, base: np.ndarray, poses: dict) -> np.ndarray | None:
+        link = frame if frame in self.urdf.link_map else (
+            self.urdf.joint_map[frame].child if frame in self.urdf.joint_map else None)
+        return None if link is None else base @ poses.get(link, np.eye(4))
+
     def reference_pose(self, frame: str) -> np.ndarray:
         """World pose of a model frame: a link, a joint (its child link) or empty for the world."""
         if not frame:
@@ -640,6 +668,7 @@ class App:
                 overlay.show(module.get("display"))
         self.show_homing_all(state["modules"])
         values = self.samples(state)
+        values.update(self.frame_samples(command, measured))
         if not self.sample_set.issuperset(values):
             with self.plot_lock:
                 self.sample_keys += [k for k in values if k not in self.sample_set]
