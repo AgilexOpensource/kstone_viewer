@@ -24,9 +24,7 @@ REASONS = {"not_started": ("未启动", "not started"), "ready": ("就绪", "rea
            "resynchronized": ("已重新同步", "resynchronized"), "stopped": ("已停止", "stopped"),
            "solve_paused": ("求解暂停", "solve paused"), "command_timeout": ("等待命令", "awaiting command"),
            "scheduler_discontinuity": ("调度不连续", "scheduler discontinuity"), "tracking": ("跟踪中", "tracking"),
-           "trajectory_error": ("轨迹错误", "trajectory error"), "path_error": ("偏离路径", "path error")}
-PHASES = {"align": ("对准", "align"), "drive": ("行驶", "drive"), "final_align": ("末端对准", "final align"),
-          "path_error": ("偏离路径", "path error")}
+           "trajectory_error": ("轨迹错误", "trajectory error")}
 POSE_SOURCES = {"internal": ("内部积分", "internal"), "odometry": ("里程计", "odometry")}
 COMMAND_MODES = {"velocity": ("速度", "velocity"), "pose": ("位姿", "pose")}
 
@@ -295,9 +293,6 @@ class ChassisView(ModuleView):
                 badges.append(html.badge(reason_text, "muted"))
         badges.append(html.badge(t("差速", "diff drive") if self.differential else t("全向", "omni"), "accent"))
         fresh = bool(out.get("command_fresh"))
-        if self.differential and out.get("command_mode") == "pose" and fresh:
-            phase = str(out.get("phase") or "-")
-            badges.append(html.badge(t("阶段", "phase") + " " + t(*PHASES.get(phase, (phase, phase))), "info"))
         label = dict((k, t(zh, en)) for k, zh, en in MODES)[self.mode_key]
         badges.append(html.badge(label, "info"))
         body = html.grid(cells, 3) + html.badge_row(badges)
