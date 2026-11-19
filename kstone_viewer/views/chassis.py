@@ -167,7 +167,7 @@ class ChassisView(ModuleView):
         if key == "joystick" and self.joystick is None:
             try:
                 self.joystick = JoystickServer(self.ui.host, self.stick, self.stick_state)
-                self.joystick_html.content = self.joystick.iframe(250 if self.differential else 270)
+                self.joystick_html.content = self.joystick.iframe(270)
             except OSError as error:
                 self.app.warn(f"joystick server: {error}")
                 key = "sliders"

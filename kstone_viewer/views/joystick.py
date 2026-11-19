@@ -172,7 +172,7 @@ box-shadow:0 2px 6px rgba(0,0,0,.25);pointer-events:none;transition:transform 60
 <body><div id="root">
 <div class="pads"><div class="col"><div class="title" id="t-xy"></div>
 <div id="xy" class="pad" role="application" tabindex="0"><div class="knob"></div></div><div class="hint" id="h-xy"></div></div>
-<div class="col" id="yaw-col"__YAW_HIDDEN__><div class="title" id="t-yaw"></div>
+<div class="col" id="yaw-col"><div class="title" id="t-yaw"></div>
 <div id="yaw" class="pad" role="application" tabindex="0"><div class="knob"></div></div><div class="hint" id="h-yaw"></div></div></div>
 <div class="row"><span class="chip" id="c-vx">vx 0.00</span><span class="chip" id="c-vy"__VY_HIDDEN__>vy 0.00</span><span class="chip" id="c-wz">wz 0.00</span></div>
 <div id="state"></div><div class="hint" id="keys"></div></div>
@@ -183,9 +183,9 @@ const dz=v=>Math.abs(v)<deadband?0:v;
 let sequence=0, axes={vx:0,vy:0,wz:0}, pointers=new Map(), keys=new Set(), busy=false, remote=false, lang='en';
 const t=(zh,en)=>lang==='zh'?zh:en, $=id=>document.getElementById(id);
 function label(){
-  $('t-xy').textContent=differential?t('行驶','Drive'):t('平移','Translate');
+  $('t-xy').textContent=t('平移','Translate');
   $('t-yaw').textContent=t('旋转','Rotate');
-  $('h-xy').textContent=differential?t('上 前进 · 左 逆时针','up forward · left CCW'):t('上 前进 · 左 左移','up forward · left strafe');
+  $('h-xy').textContent=differential?t('上 前进 · 下 后退','up forward · down back'):t('上 前进 · 左 左移','up forward · left strafe');
   $('h-yaw').textContent=t('左 逆时针 · 右 顺时针','left CCW · right CW');
   $('keys').textContent=t('点击后可用键盘 W/S A/D Q/E，Esc 停止','Click, then W/S A/D Q/E; Esc stops');
   $('xy').setAttribute('aria-label',$('t-xy').textContent);$('yaw').setAttribute('aria-label',$('t-yaw').textContent);
@@ -218,7 +218,7 @@ async function send(){
       remote=false;st.className='';
       st.textContent=!s.enabled?t('未就绪','Not ready'):(pointers.size||keys.size?t('控制中','Driving'):t('已回零','Neutral'));
     }
-    $('xy').querySelector('.knob').style.transform=`translate(${-(differential?s.wz:s.vy)*R}px,${-s.vx*R}px)`;
+    $('xy').querySelector('.knob').style.transform=`translate(${-s.vy*R}px,${-s.vx*R}px)`;
     $('yaw').querySelector('.knob').style.transform=`translate(${-s.wz*R}px,0)`;
     $('c-vx').textContent=`vx ${s.out[0].toFixed(2)} m/s`;$('c-vy').textContent=`vy ${s.out[1].toFixed(2)} m/s`;
     $('c-wz').textContent=`wz ${s.out[2].toFixed(2)} rad/s`;
@@ -227,18 +227,18 @@ async function send(){
 }
 function release(pad,notify=true){
   pointers.delete(pad.id);pad.classList.remove('on');
-  if(pad.id==='xy'){axes.vx=0;axes.vy=0;if(differential)axes.wz=0;}else axes.wz=0;
+  if(pad.id==='xy'){axes.vx=0;axes.vy=0;}else axes.wz=0;
   if(notify)send();
 }
 function stopAll(notify=true){keys.clear();for(const p of document.querySelectorAll('.pad'))release(p,false);if(notify)send();}
-for(const id of (differential?['xy']:['xy','yaw'])){
+for(const id of ['xy','yaw']){
   const pad=$(id);
   const move=e=>{
     if(pointers.get(id)!==e.pointerId)return;
     const b=pad.getBoundingClientRect();
-    let x=(e.clientX-b.left-b.width/2)/R, y=id==='yaw'?0:(e.clientY-b.top-b.height/2)/R;
+    let x=id==='xy'&&differential?0:(e.clientX-b.left-b.width/2)/R, y=id==='yaw'?0:(e.clientY-b.top-b.height/2)/R;
     const n=Math.max(1,Math.hypot(x,y));x/=n;y/=n;
-    if(id==='xy'){axes.vx=dz(-y);if(differential){axes.vy=0;axes.wz=dz(-x);}else axes.vy=dz(-x);}else axes.wz=dz(-x);
+    if(id==='xy'){axes.vx=dz(-y);axes.vy=dz(-x);}else axes.wz=dz(-x);
     send();
   };
   pad.addEventListener('pointerdown',e=>{if(remote||pointers.has(id))return;pad.focus();pointers.set(id,e.pointerId);
@@ -261,6 +261,5 @@ label();setInterval(send,80);send();
 
 def joystick_page(differential: bool, deadband: float) -> str:
     return (_PAGE.replace("__DIFFERENTIAL__", "true" if differential else "false")
-            .replace("__YAW_HIDDEN__", " hidden" if differential else "")
             .replace("__VY_HIDDEN__", " hidden" if differential else "")
             .replace("__DEADBAND__", repr(float(deadband))))
