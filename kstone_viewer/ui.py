@@ -88,6 +88,11 @@ class Choice:
     def on_change(self, callback: Callable[[str], None]) -> None:
         self._callbacks.append(callback)
 
+    def set_label(self, key: str, zh: str, en: str) -> None:
+        self.options = tuple((option, zh, en) if option == key else (option, o_zh, o_en)
+                             for option, o_zh, o_en in self.options)
+        self.relabel()
+
     def relabel(self) -> None:
         with self.ui.syncing():
             self.handle.options = self.labels()
@@ -126,6 +131,11 @@ class ViewerUI:
     def bind(self, handle: Any, attribute: str, text: Text) -> Any:
         self._bindings.append((handle, attribute, text))
         return handle
+
+    def retext(self, handle: Any, attribute: str, text: Text) -> None:
+        """Change a bound text; later language switches keep the new one."""
+        self._bindings = [(h, a, text if h is handle and a == attribute else t) for h, a, t in self._bindings]
+        self.set(handle, attribute, self.t(*text))
 
     def key(self, handle: Any, attribute: str, key: str, **fields: Any) -> Any:
         """Bind a ``text.TEXT`` entry, formatted with ``fields``."""

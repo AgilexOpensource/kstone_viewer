@@ -5,7 +5,7 @@ from ..tune import finite
 from .base import ModuleView
 
 MODE_TONES = {"gaze": "ok", "home": "info", "paused": "warn", "disabled": "muted"}
-MODE_TEXT = {"gaze": ("注视", "gaze"), "home": ("回初始", "home"), "paused": ("被占用", "paused"),
+MODE_TEXT = {"gaze": ("注视", "gaze"), "home": ("回 Home", "home"), "paused": ("被占用", "paused"),
              "disabled": ("已禁用", "disabled")}
 
 

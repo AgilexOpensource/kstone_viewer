@@ -19,6 +19,7 @@ class Client:
         self._send_lock = threading.Lock()
         self._next_id = 1
         self._backlog: deque[dict] = deque()
+        self.capabilities: frozenset[str] = frozenset()
 
     def close(self) -> None:
         try:
@@ -72,6 +73,7 @@ class Client:
             raise ConnectionError(f"server refused the connection: {hello.get('error')}")
         if hello.get("type") != "hello" or hello.get("version") != PROTOCOL_VERSION:
             raise ConnectionError(f"unsupported greeting {hello}")
+        self.capabilities = frozenset(hello.get("capabilities") or ())
         if hello.get("auth_required"):
             if not token:
                 raise ConnectionError("server requires a token")

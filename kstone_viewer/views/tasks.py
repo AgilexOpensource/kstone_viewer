@@ -9,7 +9,7 @@ from .. import html
 from ..geometry import matrix_to_rpy, rpy_to_matrix, set_pose, wxyz_to_matrix
 from ..ports import Throttle
 from ..tune import EDIT_HOLD_S, finite
-from .base import ModuleView
+from .base import CANCEL_TEXT, ModuleView
 
 
 def fmt_xyz(p) -> str:
@@ -199,15 +199,16 @@ class JointTargetView(ModuleView):
         else:
             self.add_enabled("启用", "Enabled")
         self.add_ports()
+        self.actions = None
         quick = []
         if self.vector_name is not None and len(self.params.get("home") or []) == len(self.names):
             quick.append(("initial", "初始值", "Initial"))
         if self.vector_name is not None and self.measured() is not None:
             quick.append(("current", "跟随当前", "Hold current"))
         if self.homeable:
-            quick.append(("home", "回初始", "Home"))
+            quick.append(("home", "回 Home", "Home"))
         if quick:
-            hint = ("初始值 / 跟随当前：设滑块目标；回初始：按 home_motion 规划回初始值，期间占用这些关节，完成后恢复原控制",
+            hint = ("初始值 / 跟随当前：设滑块目标；回 Home：按 home_motion 规划回 Home，期间占用这些关节，完成后恢复原控制",
                      "Initial / Hold current: set the slider targets; Home: planned move to the initial values "
                      "(home_motion), holding these joints until done")
             self.actions = self.ui.choice("快捷", "Quick", quick, quick[0][0], buttons=True, hint=hint)
@@ -221,6 +222,11 @@ class JointTargetView(ModuleView):
             self.control.disabled = False
             if time.monotonic() - self.edited >= EDIT_HOLD_S:
                 self.ui.set_value(self.control, self.holding())
+
+    def show_homing(self, homing: bool) -> None:
+        super().show_homing(homing)
+        if self.actions is not None and self.homeable:
+            self.actions.set_label("home", *(CANCEL_TEXT if homing else ("回 Home", "Home")))
 
     def holding(self) -> bool:
         return self.params.get("on_idle") == "claim" and bool((self.state or {}).get("enabled"))
@@ -250,7 +256,7 @@ class JointTargetView(ModuleView):
 
     def quick(self, key: str) -> None:
         if key == "home":
-            self.app.request("home", self.id)
+            self.home_or_cancel()
         elif key == "initial":
             self.set_targets([float(v) for v in self.params.get("home") or []])
         else:

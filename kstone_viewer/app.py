@@ -21,6 +21,7 @@ from .text import LANGUAGES, TEXT, Lang, Prefs
 from .tune import EDIT_HOLD_S, TunePanel, finite
 from .ui import TABS, ViewerUI, icon_of
 from .views import ModuleView, view_for
+from .views.base import HOMING
 
 DEFAULT_RENDER_HZ = 30
 GHOST_COLOR = (0.35, 0.6, 1.0, 0.35)
@@ -82,6 +83,12 @@ def ms(seconds) -> str:
     return f"{seconds * 1e3:.2f}" if finite(seconds) else "--"
 
 
+HOME_ALL_TEXT = ("全部回 Home", "Home all")
+HOME_ALL_HINT = ("每个部位只回 Home 一次：优先由正在驱动它的模块回 Home", "Home each part once, through the module driving it")
+CANCEL_ALL_TEXT = ("全部取消回 Home", "Cancel all homing")
+CANCEL_ALL_HINT = ("让所有回 Home 停在当前位置", "Stop every homing where it is")
+
+
 class App:
     def __init__(self, server: viser.ViserServer, client: Client, hello: dict, urdf_path: Path, prefs: Prefs,
                  host: str = "127.0.0.1"):
@@ -89,6 +96,8 @@ class App:
         self.client = client
         self.prefs = prefs
         self.hello = hello
+        self.home_all_button = None
+        self.homing_all = False
         self.chassis = any(m.get("type") == "chassis" for m in hello["modules"])
         self.rebuild = False
         self.ui = ui = ViewerUI(server, language=prefs.get("language", "zh", lambda v: v in LANGUAGES),
@@ -228,10 +237,8 @@ class App:
         self.actual_hz: float | None = None
         self.qp_average: float | None = None
         self.rate_slider.on_update(self.rate_changed)
-        home = ui.button("全部回零", "Home all", icon="HOME",
-                         hint=("每个部位只回零一次：优先由正在驱动它的模块回零", "Home each part once, through the module driving it"))
-        home.on_click(lambda event: ui.confirm(event.client, ui.k("home_all"), ui.k("home_all_confirm"),
-                                               ui.k("home_all"), self.home_all))
+        home = self.home_all_button = ui.button(*HOME_ALL_TEXT, icon="HOME", hint=HOME_ALL_HINT)
+        home.on_click(self.home_all_clicked)
         resync = ui.button("同步实测", "Sync to feedback", icon="REFRESH", color="orange",
                            hint=("把命令重新对齐到实测位置并放弃保持的目标，例如驱动闸门关闭后", "Realign the command to the measured position and drop held targets, e.g. after a closed driver gate"))
         resync.on_click(lambda event: ui.confirm(event.client, ui.k("resync_all"), ui.k("resync_confirm"),
@@ -390,9 +397,29 @@ class App:
             self.rate_window = (now, cycles)
         return rate
 
+    def can(self, op: str) -> bool:
+        return op in getattr(self.client, "capabilities", ())
+
     def home_all(self) -> None:
         """Home the modules in control; the server arbitrates (see ModuleSet::home_all)."""
         self.request("home_all")
+
+    def home_all_clicked(self, event) -> None:
+        # While any module homes the button cancels them all, at once (a stop needs no confirmation).
+        if self.homing_all:
+            self.request("cancel_home_all")
+        else:
+            self.ui.confirm(event.client, self.ui.k("home_all"), self.ui.k("home_all_confirm"),
+                            self.ui.k("home_all"), self.home_all)
+
+    def show_homing_all(self, modules: list) -> None:
+        homing = self.can("cancel_home_all") and any(m.get("home") in HOMING for m in modules)
+        if homing == self.homing_all:
+            return
+        self.homing_all = homing
+        if self.home_all_button is not None:
+            self.ui.retext(self.home_all_button, "label", CANCEL_ALL_TEXT if homing else HOME_ALL_TEXT)
+            self.ui.retext(self.home_all_button, "hint", CANCEL_ALL_HINT if homing else HOME_ALL_HINT)
 
     def resync(self) -> None:
         """Sync every attached feedback group's command to its measurement; the server drops held targets."""
@@ -611,6 +638,7 @@ class App:
             overlay = self.overlays.get(module.get("id"))
             if overlay is not None:
                 overlay.show(module.get("display"))
+        self.show_homing_all(state["modules"])
         values = self.samples(state)
         if not self.sample_set.issuperset(values):
             with self.plot_lock:

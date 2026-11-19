@@ -32,11 +32,17 @@ def output_text(outputs: list, display) -> str:
 
 
 HOME_STATES = {
-    "waiting": ("回零排队", "homing queued", "info"),
-    "executing": ("回零中", "homing", "info"),
-    "timed_out": ("回零超时：连续 timeout_s 无进展", "homing timed out (no progress for timeout_s)", "warn"),
-    "aborted": ("回零中止", "homing aborted", "muted"),
+    "waiting": ("回 Home 排队", "homing queued", "info"),
+    "executing": ("回 Home 中", "homing", "info"),
+    "timed_out": ("回 Home 超时：连续 timeout_s 无进展", "homing timed out (no progress for timeout_s)", "warn"),
+    "aborted": ("回 Home 中止", "homing aborted", "muted"),
+    "cancelled": ("回 Home 已取消", "homing cancelled", "muted"),
 }
+HOMING = ("waiting", "executing")
+HOME_TEXT = ("回 Home", "Home")
+HOME_HINT = ("按 home_motion 缓慢回到初始目标", "Ramp back to the initial target (home_motion)")
+CANCEL_TEXT = ("取消回 Home", "Cancel home")
+CANCEL_HINT = ("让回 Home 停在当前位置，模块保持使能", "Stop the homing where it is; the module stays enabled")
 
 
 PREEMPT_SHOW_S = 5.0
@@ -71,6 +77,8 @@ class ModuleView:
         self.folder = None
         self.preempt_n = None
         self.preempt_at = None
+        self.home_button = None
+        self.home_shown = False
 
     @property
     def anchor(self) -> str | None:
@@ -104,9 +112,21 @@ class ModuleView:
 
     def add_home(self) -> None:
         if self.homeable:
-            button = self.ui.button("回零", "Home", icon="HOME",
-                                    hint=("按 home_motion 缓慢回到初始目标", "Ramp back to the initial target (home_motion)"))
-            button.on_click(lambda _: self.app.request("home", self.id))
+            self.home_button = self.ui.button(*HOME_TEXT, icon="HOME", hint=HOME_HINT)
+            self.home_button.on_click(lambda _: self.home_or_cancel())
+
+    def homing(self) -> bool:
+        """Homing and the server can cancel it: the home button cancels instead."""
+        return (self.state or {}).get("home") in HOMING and self.app.can("cancel_home")
+
+    def home_or_cancel(self) -> None:
+        self.app.request("cancel_home" if self.homing() else "home", self.id)
+
+    def show_homing(self, homing: bool) -> None:
+        """Retitle the home controls when homing starts or ends."""
+        if self.home_button is not None:
+            self.ui.retext(self.home_button, "label", CANCEL_TEXT if homing else HOME_TEXT)
+            self.ui.retext(self.home_button, "hint", CANCEL_HINT if homing else HOME_HINT)
 
     def add_ports(self, names=None) -> None:
         for name, port in self.port_specs.items():
@@ -174,6 +194,9 @@ class ModuleView:
     # -- server messages -----------------------------------------------------------------------------------------
     def show(self, state: dict) -> None:
         self.state = state
+        if self.homing() != self.home_shown:
+            self.home_shown = self.homing()
+            self.show_homing(self.home_shown)
         if self.enabled is not None:
             self.enabled.disabled = False
             if time.monotonic() - self.edited >= EDIT_HOLD_S:

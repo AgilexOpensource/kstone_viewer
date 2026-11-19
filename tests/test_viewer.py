@@ -74,6 +74,27 @@ if App is not None:
     App.home_all(fake)
     assert fake.sent == [("home_all", None)], fake.sent
 
+    class HomingFake(HomeFake):
+        def __init__(self, capabilities):
+            super().__init__()
+            self.client = type("C", (), {"capabilities": frozenset(capabilities)})()
+            self.home_all_button = None
+            self.homing_all = False
+
+        can = App.can
+
+    # While a module homes, Home all turns into Cancel all homing (only when the server has the op).
+    fake = HomingFake({"cancel_home_all"})
+    App.show_homing_all(fake, [{"home": "idle"}, {"home": "executing"}])
+    assert fake.homing_all
+    App.home_all_clicked(fake, None)
+    assert fake.sent == [("cancel_home_all", None)], fake.sent
+    App.show_homing_all(fake, [{"home": "cancelled"}])
+    assert not fake.homing_all
+    fake = HomingFake(())
+    App.show_homing_all(fake, [{"home": "waiting"}])
+    assert not fake.homing_all
+
     class ResyncFake:
         def __init__(self):
             self.sent = []
