@@ -24,7 +24,7 @@ REASONS = {"not_started": ("未启动", "not started"), "ready": ("就绪", "rea
            "resynchronized": ("已重新同步", "resynchronized"), "stopped": ("已停止", "stopped"),
            "solve_paused": ("求解暂停", "solve paused"), "command_timeout": ("等待命令", "awaiting command"),
            "scheduler_discontinuity": ("调度不连续", "scheduler discontinuity"), "tracking": ("跟踪中", "tracking"),
-           "trajectory_error": ("轨迹错误", "trajectory error")}
+           "trajectory_error": ("轨迹错误", "trajectory error"), "yielded": ("已让出", "yielded")}
 POSE_SOURCES = {"internal": ("内部积分", "internal"), "odometry": ("里程计", "odometry")}
 COMMAND_MODES = {"velocity": ("速度", "velocity"), "pose": ("位姿", "pose")}
 
@@ -57,6 +57,7 @@ class ChassisView(ModuleView):
         self.stick_sent = (0.0, 0.0, 0.0)
         self.mode_key = "sliders"
         self.goal_edited = 0.0
+        self.following = False
         self.trail_points: deque = deque(maxlen=TRAIL_POINTS)
         self.trail_flush = 0.0
 
@@ -185,6 +186,7 @@ class ChassisView(ModuleView):
             along = (x - bx) * c + (y - by) * s
             x, y = bx + along * c, by + along * s
         self.goal_edited = time.monotonic()
+        self.following = False
         self.pose.command([x, y, wrap(yaw)])
         return x, y
 
@@ -268,7 +270,17 @@ class ChassisView(ModuleView):
         out = self.outputs()
         if self.pose is not None and self.mode_key == "pose" and time.monotonic() - self.goal_edited >= EDIT_HOLD_S \
                 and len(self.pose.values) == 3:
-            self.place_goal(*self.pose.values)
+            if out.get("reason") == "yielded" and not self.following:
+                # Another source moved the base off the goal: stop holding the goal and follow the base until
+                # the next edit.
+                self.following = True
+                self.pose.stop_keepalive()
+            if self.following:
+                here = [float(out.get(k) or 0.0) for k in ("x", "y", "yaw")]
+                self.pose.values = here
+                self.place_goal(*here)
+            else:
+                self.place_goal(*self.pose.values)
 
         def num(key):
             v = out.get(key)
